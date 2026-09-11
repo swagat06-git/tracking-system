@@ -4,30 +4,17 @@
 
 ### Image Coordinates
 
-Origin: top-left
-
-X → right
-
-Y → down
+- Origin: top-left
+- X → right
+- Y → down
 
 ---
 
-## Simulator → Tracking System
+## Simulator
 
-### get_frame()
+The simulator generates a synthetic image containing the target.
 
-Returns:
-
-- 640 × 480 image frame
-
----
-
-### get_ground_truth()
-
-Returns:
+### Target Position
 
 ```python
-{
-    "x": float,
-    "y": float
-}
+target.get_position()
