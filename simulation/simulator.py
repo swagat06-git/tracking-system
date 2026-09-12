@@ -73,7 +73,9 @@ class Simulator:
             width=self.camera_width,
             height=self.camera_height,
             world_width=self.width,
-            world_height=self.height
+            world_height=self.height,
+            max_pan_speed=config["control"]["max_pan_speed"],
+            max_tilt_speed=config["control"]["max_tilt_speed"]
         )
 
     # -----------------------------------------
@@ -87,7 +89,14 @@ class Simulator:
             self.target,
             self.dt
         )
+    def move_camera(self, pan_speed, tilt_speed):
+        """Move the camera using pan and tilt speeds."""
 
+        self.camera.move(
+            pan_speed,
+            tilt_speed,
+            self.dt
+        )
     # -----------------------------------------
     # GET COMPLETE WORLD FRAME
     # -----------------------------------------
