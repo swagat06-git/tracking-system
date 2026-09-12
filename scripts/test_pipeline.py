@@ -10,6 +10,8 @@ def main():
     print("Tracking Pipeline Motion Test")
     print("=" * 60)
 
+    all_detected = True
+
     for frame_number in range(30):
 
         frame = np.zeros((480, 640), dtype=np.uint8)
@@ -28,6 +30,9 @@ def main():
 
         result = pipeline.process(frame)
 
+        if not result["detected"]:
+            all_detected = False
+
         if frame_number % 5 == 0:
             print(
                 f"Frame {frame_number:02d} | "
@@ -38,10 +43,10 @@ def main():
 
     print("\n" + "=" * 60)
 
-    if result["detected"]:
-        print("PASS: Tracking pipeline processed moving target.")
+    if all_detected:
+        print("PASS: All 30 frames were processed successfully.")
     else:
-        print("FAIL: Target was not detected.")
+        print("FAIL: One or more frames were not detected.")
 
 
 if __name__ == "__main__":
