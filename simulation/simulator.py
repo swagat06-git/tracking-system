@@ -1,30 +1,30 @@
 from simulation.scene import Scene
 from simulation.target import Target
 from simulation.motion import Motion
+from simulation.camera import Camera
 
 
 class Simulator:
     def __init__(self, config):
-
-        # Read configuration
         self.width = config["canvas"]["width"]
         self.height = config["canvas"]["height"]
 
         self.target_size = config["target"]["size"]
         self.target_brightness = config["target"]["brightness"]
 
+        self.camera_width = config["camera"]["width"]
+        self.camera_height = config["camera"]["height"]
+
         self.fps = config["camera"]["fps"]
         self.dt = 1 / self.fps
 
         self.motion_type = config["motion"]["type"]
 
-        # Create scene
         self.scene = Scene(
             self.width,
             self.height
         )
 
-        # Create target
         self.target = Target(
             x=self.width / 2,
             y=self.height / 2,
@@ -32,30 +32,31 @@ class Simulator:
             brightness=self.target_brightness
         )
 
-        # Initial velocity
         self.target.set_velocity(
             200,
             100
         )
 
-        # Create motion system
         self.motion = Motion(
             self.motion_type,
             self.width,
             self.height
         )
 
-    def update(self):
-        """Advance simulation by one frame."""
+        self.camera = Camera(
+            width=self.camera_width,
+            height=self.camera_height,
+            world_width=self.width,
+            world_height=self.height
+        )
 
+    def update(self):
         self.motion.update(
             self.target,
             self.dt
         )
 
     def get_world_frame(self):
-        """Return the complete 2000×2000 simulation world."""
-
         canvas = self.scene.create_canvas()
 
         self.scene.draw_target(
@@ -65,9 +66,14 @@ class Simulator:
 
         return canvas
 
-    def get_ground_truth(self):
-        """Return the true target position."""
+    def get_frame(self):
+        world_frame = self.get_world_frame()
 
+        frame = self.camera.get_frame(world_frame)
+
+        return frame
+
+    def get_ground_truth(self):
         x, y = self.target.get_position()
 
         return {

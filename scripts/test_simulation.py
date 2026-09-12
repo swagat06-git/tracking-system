@@ -42,6 +42,7 @@ with open(config_path, "r") as file:
 
 simulator = Simulator(config)
 
+print("Camera position:", simulator.camera.get_position())
 
 # -----------------------------------------
 # SIMULATION LOOP
@@ -52,23 +53,23 @@ while True:
     # Advance simulation by one frame
     simulator.update()
 
-    # Get complete world frame
-    frame = simulator.get_world_frame()
+    # Get the official 640x480 camera frame
+    frame = simulator.get_frame()
 
     # Get ground truth
     ground_truth = simulator.get_ground_truth()
 
-    # Resize only for display
-    display = cv2.resize(frame, (800, 800))
-
-    # Show simulation
-    cv2.imshow(
-        "FSOC Target Simulation",
-        display
-    )
+    # Verify frame dimensions
+    print("Frame shape:", frame.shape)
 
     # Print ground truth
-    print(ground_truth)
+    print("Ground truth:", ground_truth)
+
+    # Show camera frame
+    cv2.imshow(
+        "FSOC Camera View",
+        frame
+    )
 
     # Exit with q
     key = cv2.waitKey(
