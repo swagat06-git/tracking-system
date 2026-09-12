@@ -1,88 +1,87 @@
-import sys
 import os
+import sys
+import json
 import cv2
 
-# Add project root to Python path
+
+# -----------------------------------------
+# PROJECT ROOT
+# -----------------------------------------
+
 PROJECT_ROOT = os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))
 )
 
 sys.path.append(PROJECT_ROOT)
 
-from simulation.scene import Scene
-from simulation.target import Target
-from simulation.motion import Motion
+
+# -----------------------------------------
+# IMPORT SIMULATOR
+# -----------------------------------------
+
+from simulation.simulator import Simulator
 
 
-# ----------------------------
-# CONFIGURATION
-# ----------------------------
+# -----------------------------------------
+# LOAD CONFIGURATION
+# -----------------------------------------
 
-CANVAS_WIDTH = 2000
-CANVAS_HEIGHT = 2000
-
-TARGET_SIZE = 10
-TARGET_BRIGHTNESS = 255
-
-FPS = 30
-DT = 1 / FPS
-
-MOTION_TYPE = "linear"
-
-
-# ----------------------------
-# CREATE OBJECTS
-# ----------------------------
-
-scene = Scene(CANVAS_WIDTH, CANVAS_HEIGHT)
-
-target = Target(
-    x=500,
-    y=500,
-    size=TARGET_SIZE,
-    brightness=TARGET_BRIGHTNESS
+config_path = os.path.join(
+    PROJECT_ROOT,
+    "config",
+    "config.json"
 )
 
-motion = Motion(
-    MOTION_TYPE,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT
-)
+with open(config_path, "r") as file:
+    config = json.load(file)
 
 
-# Initial velocity for linear motion
-target.set_velocity(200, 100)
+# -----------------------------------------
+# CREATE SIMULATOR
+# -----------------------------------------
 
+simulator = Simulator(config)
 
-# ----------------------------
+print("Camera position:", simulator.camera.get_position())
+
+# -----------------------------------------
 # SIMULATION LOOP
-# ----------------------------
+# -----------------------------------------
 
 while True:
 
-    # Update target position
-    motion.update(target, DT)
+    # Advance simulation by one frame
+    simulator.update()
 
-    # Create a fresh canvas
-    canvas = scene.create_canvas()
-
-    # Draw target
-    scene.draw_target(canvas, target)
-
-    # Display the simulation
-    cv2.imshow(
-        "FSOC Target Simulation",
-        canvas
-    )
+    # Get the official 640x480 camera frame
+    frame = simulator.get_frame()
 
     # Get ground truth
-    x, y = target.get_position()
+    ground_truth = simulator.get_ground_truth()
 
-    # Exit when q is pressed
-    key = cv2.waitKey(int(1000 / FPS))
+    # Verify frame dimensions
+    print("Frame shape:", frame.shape)
+
+    # Print ground truth
+    print("Ground truth:", ground_truth)
+
+    # Show camera frame
+    cv2.imshow(
+        "FSOC Camera View",
+        frame
+    )
+
+    # Exit with q
+    key = cv2.waitKey(
+        int(1000 / config["camera"]["fps"])
+    ) & 0xFF
 
     if key == ord("q"):
         break
 
+
+# -----------------------------------------
+# CLEANUP
+# -----------------------------------------
 
 cv2.destroyAllWindows()
