@@ -12,7 +12,7 @@ class KalmanTracker:
     vx, vy -> target velocity in pixels/second
     """
 
-    def __init__(self, dt=1 / 30, acceleration_noise=50.0):
+    def __init__(self, dt=1 / 30, acceleration_noise=100.0):
         self.dt = dt
 
         # State vector: [x, y, vx, vy]
