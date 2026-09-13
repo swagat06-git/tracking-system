@@ -1,3 +1,5 @@
+import numpy as np
+
 from simulation.scene import Scene
 from simulation.target import Target
 from simulation.motion import Motion
@@ -25,6 +27,14 @@ class Simulator:
         self.dt = 1 / self.fps
 
         self.motion_type = config["motion"]["type"]
+
+        # -----------------------------------------
+        # DISTURBANCE CONFIGURATION
+        # -----------------------------------------
+
+        self.noise_type = config["disturbance"]["noise_type"]
+        self.noise_level = config["disturbance"]["noise_level"]
+        self.camera_jitter = config["disturbance"]["camera_jitter"]
 
         # -----------------------------------------
         # CREATE SCENE
@@ -75,7 +85,8 @@ class Simulator:
             world_width=self.width,
             world_height=self.height,
             max_pan_speed=config["control"]["max_pan_speed"],
-            max_tilt_speed=config["control"]["max_tilt_speed"]
+            max_tilt_speed=config["control"]["max_tilt_speed"],
+            camera_jitter=self.camera_jitter
         )
 
     # -----------------------------------------
@@ -89,6 +100,11 @@ class Simulator:
             self.target,
             self.dt
         )
+
+    # -----------------------------------------
+    # MOVE CAMERA
+    # -----------------------------------------
+
     def move_camera(self, pan_speed, tilt_speed):
         """Move the camera using pan and tilt speeds."""
 
@@ -97,6 +113,7 @@ class Simulator:
             tilt_speed,
             self.dt
         )
+
     # -----------------------------------------
     # GET COMPLETE WORLD FRAME
     # -----------------------------------------
@@ -118,13 +135,50 @@ class Simulator:
     # -----------------------------------------
 
     def get_frame(self):
-        """Return the current 640x480 camera frame."""
+        """
+        Return the current camera frame with optional
+        camera jitter and measurement noise.
+        """
 
+        # Get complete simulation world
         world_frame = self.get_world_frame()
 
+        # Get camera view
+        # Camera handles temporary jitter internally
         frame = self.camera.get_frame(
             world_frame
         )
+
+        # -----------------------------------------
+        # APPLY MEASUREMENT NOISE
+        # -----------------------------------------
+
+        if (
+            self.noise_type == "gaussian"
+            and self.noise_level > 0
+        ):
+
+            noise = np.random.normal(
+                loc=0,
+                scale=self.noise_level,
+                size=frame.shape
+            )
+
+            # Convert before adding noise
+            noisy_frame = (
+                frame.astype(np.float32)
+                + noise
+            )
+
+            # Keep pixel values valid
+            noisy_frame = np.clip(
+                noisy_frame,
+                0,
+                255
+            )
+
+            # Convert back to image format
+            frame = noisy_frame.astype(np.uint8)
 
         return frame
 
@@ -133,7 +187,9 @@ class Simulator:
     # -----------------------------------------
 
     def get_ground_truth(self):
-        """Return target position in camera/image coordinates."""
+        """
+        Return target position in camera/image coordinates.
+        """
 
         target_x, target_y = self.target.get_position()
 
