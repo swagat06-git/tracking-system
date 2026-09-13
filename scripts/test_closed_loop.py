@@ -1,5 +1,6 @@
 import json
 import math
+import argparse
 
 from simulation.simulator import Simulator
 from tracking.pipeline import TrackingPipeline
@@ -7,6 +8,9 @@ from control.controller import CameraController
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gain", type=float, default=5.0)
+    args = parser.parse_args()
 
     # -------------------------------------------------
     # Load configuration
@@ -31,7 +35,8 @@ def main():
         frame_width=config["camera"]["width"],
         frame_height=config["camera"]["height"],
         max_pan_speed=config["control"]["max_pan_speed"],
-        max_tilt_speed=config["control"]["max_tilt_speed"]
+        max_tilt_speed=config["control"]["max_tilt_speed"],
+        gain=args.gain
     )
 
     total_frames = 180
@@ -89,7 +94,16 @@ def main():
             and
             0 <= target_y < camera_height
         )
+        # -------------------------------------------------
+        # Visibility
+        # -------------------------------------------------
 
+        # Ground truth determines whether the target is
+        # physically inside the camera view.
+        if not inside_camera:
+            out_of_view_frames += 1
+
+        
         # -------------------------------------------------
         # Detection + Kalman tracking
         # -------------------------------------------------

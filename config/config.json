@@ -27,6 +27,7 @@
 
     "control": {
         "max_pan_speed": 5.0,
-        "max_tilt_speed": 5.0
+        "max_tilt_speed": 5.0,
+        "gain": 5.0
     }
 }

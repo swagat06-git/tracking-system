@@ -10,7 +10,7 @@ class CameraController:
         frame_height=480,
         max_pan_speed=5.0,
         max_tilt_speed=5.0,
-        gain=0.02
+        gain=5.0
     ):
 
         self.frame_width = frame_width
