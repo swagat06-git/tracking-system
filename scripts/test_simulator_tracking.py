@@ -62,12 +62,12 @@ def main():
         # Get camera frame
         frame = simulator.get_frame()
 
-        # Get world-coordinate ground truth
+        # Get camera/image-coordinate ground truth
         truth = simulator.get_ground_truth()
 
-        # Convert world coordinates to camera coordinates
-        truth_x = truth["x"] - camera_x
-        truth_y = truth["y"] - camera_y
+        
+        truth_x = truth["x"] 
+        truth_y = truth["y"] 
 
         # Check whether target should be inside camera view
         target_visible = (
