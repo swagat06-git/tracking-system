@@ -1,0 +1,152 @@
+[
+    {
+        "jitter_level": 0.0,
+        "noise_level": 0.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.43,
+        "max_error_px": 1.1,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 0.0,
+        "noise_level": 2.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.43,
+        "max_error_px": 1.1,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 0.0,
+        "noise_level": 5.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.43,
+        "max_error_px": 1.1,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 1.0,
+        "noise_level": 0.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.49,
+        "max_error_px": 0.98,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 1.0,
+        "noise_level": 2.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.51,
+        "max_error_px": 1.17,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 1.0,
+        "noise_level": 5.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.46,
+        "max_error_px": 1.09,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 3.0,
+        "noise_level": 0.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.66,
+        "max_error_px": 1.29,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 3.0,
+        "noise_level": 2.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.68,
+        "max_error_px": 1.96,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 3.0,
+        "noise_level": 5.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 0.71,
+        "max_error_px": 1.7,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 5.0,
+        "noise_level": 0.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.33,
+        "max_error_px": 2.88,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 5.0,
+        "noise_level": 2.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.14,
+        "max_error_px": 2.38,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 5.0,
+        "noise_level": 5.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.21,
+        "max_error_px": 2.18,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 8.0,
+        "noise_level": 0.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.31,
+        "max_error_px": 2.82,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 8.0,
+        "noise_level": 2.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.07,
+        "max_error_px": 2.33,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    },
+    {
+        "jitter_level": 8.0,
+        "noise_level": 5.0,
+        "total_frames": 180,
+        "tracked_frames": 180,
+        "mean_error_px": 1.88,
+        "max_error_px": 3.85,
+        "out_of_view_frames": 0,
+        "detection_failures": 0
+    }
+]
