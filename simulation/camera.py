@@ -1,3 +1,6 @@
+import random
+
+
 class Camera:
     def __init__(
         self,
@@ -6,7 +9,8 @@ class Camera:
         world_width,
         world_height,
         max_pan_speed=5.0,
-        max_tilt_speed=5.0
+        max_tilt_speed=5.0,
+        camera_jitter=0
     ):
         self.width = width
         self.height = height
@@ -22,16 +26,45 @@ class Camera:
         self.max_pan_speed = max_pan_speed
         self.max_tilt_speed = max_tilt_speed
 
+        # Maximum temporary camera jitter in pixels
+        self.camera_jitter = camera_jitter
+
         # Start camera at the center of the world
         self.x = (world_width - width) / 2
         self.y = (world_height - height) / 2
 
     def get_frame(self, world_frame):
-        """Return the camera's view of the world."""
+        """Return the camera's view of the world with optional jitter."""
+
+        # Generate temporary random jitter
+        jitter_x = random.uniform(
+            -self.camera_jitter,
+            self.camera_jitter
+        )
+
+        jitter_y = random.uniform(
+            -self.camera_jitter,
+            self.camera_jitter
+        )
+
+        # Temporary rendered camera position
+        rendered_x = self.x + jitter_x
+        rendered_y = self.y + jitter_y
+
+        # Keep rendered position inside world boundaries
+        rendered_x = max(
+            0,
+            min(rendered_x, self.max_x)
+        )
+
+        rendered_y = max(
+            0,
+            min(rendered_y, self.max_y)
+        )
 
         # Convert position to integers for NumPy slicing
-        x = int(self.x)
-        y = int(self.y)
+        x = int(rendered_x)
+        y = int(rendered_y)
 
         frame = world_frame[
             y:y + self.height,
@@ -41,7 +74,7 @@ class Camera:
         return frame
 
     def get_position(self):
-        """Return the camera position in world coordinates."""
+        """Return the commanded camera position in world coordinates."""
 
         return self.x, self.y
 
@@ -49,16 +82,11 @@ class Camera:
         """
         Move the camera.
 
-        pan_speed:
-            Positive = right
-            Negative = left
+        Positive pan  = right
+        Negative pan  = left
 
-        tilt_speed:
-            Positive = down
-            Negative = up
-
-        dt:
-            Time step in seconds
+        Positive tilt = down
+        Negative tilt = up
         """
 
         # Limit pan speed
@@ -73,7 +101,7 @@ class Camera:
             min(tilt_speed, self.max_tilt_speed)
         )
 
-        # Update position
+        # Update commanded position
         self.x += pan_speed * dt
         self.y += tilt_speed * dt
 
