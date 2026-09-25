@@ -22,9 +22,12 @@ env/
 
 # Generated data
 data/
+dataset/
 outputs/
 logs/
 runs/
+
+debug_closed_loop_frame.png
 
 # ML models
 *.pt
