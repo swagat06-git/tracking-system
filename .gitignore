@@ -28,6 +28,7 @@ logs/
 runs/
 
 debug_closed_loop_frame.png
+tracking_error_over_time.png
 
 # ML models
 *.pt

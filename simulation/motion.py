@@ -13,7 +13,7 @@ class Motion:
         # Parameters for circular motion
         self.center_x = width / 2
         self.center_y = height / 2
-        self.radius = 400
+        self.radius = 200
 
         # Parameters for figure-8 motion
         self.figure8_scale = 400
