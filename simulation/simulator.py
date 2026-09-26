@@ -1,0 +1,218 @@
+import numpy as np
+
+from simulation.scene import Scene
+from simulation.target import Target
+from simulation.motion import Motion
+from simulation.camera import Camera
+
+
+class Simulator:
+
+    def __init__(self, config):
+
+        # -----------------------------------------
+        # READ CONFIGURATION
+        # -----------------------------------------
+
+        self.width = config["canvas"]["width"]
+        self.height = config["canvas"]["height"]
+
+        self.target_size = config["target"]["size"]
+        self.target_brightness = config["target"]["brightness"]
+
+        self.camera_width = config["camera"]["width"]
+        self.camera_height = config["camera"]["height"]
+
+        self.fps = config["camera"]["fps"]
+        self.dt = 1 / self.fps
+
+        self.motion_type = config["motion"]["type"]
+
+        # -----------------------------------------
+        # DISTURBANCE CONFIGURATION
+        # -----------------------------------------
+
+        self.noise_type = config["disturbance"]["noise_type"]
+        self.noise_level = config["disturbance"]["noise_level"]
+        self.camera_jitter = config["disturbance"]["camera_jitter"]
+
+        # -----------------------------------------
+        # CREATE SCENE
+        # -----------------------------------------
+
+        self.scene = Scene(
+            self.width,
+            self.height
+        )
+
+        # -----------------------------------------
+        # CREATE TARGET
+        # -----------------------------------------
+
+        self.target = Target(
+            x=self.width / 2,
+            y=self.height / 2,
+            size=self.target_size,
+            brightness=self.target_brightness
+        )
+
+        # -----------------------------------------
+        # SET INITIAL VELOCITY
+        # -----------------------------------------
+
+        self.target.set_velocity(
+            200,
+            100
+        )
+
+        # -----------------------------------------
+        # CREATE MOTION SYSTEM
+        # -----------------------------------------
+
+        self.motion = Motion(
+            self.motion_type,
+            self.width,
+            self.height
+        )
+
+        # -----------------------------------------
+        # CREATE VIRTUAL CAMERA
+        # -----------------------------------------
+
+        self.camera = Camera(
+            width=self.camera_width,
+            height=self.camera_height,
+            world_width=self.width,
+            world_height=self.height,
+            max_pan_speed=config["control"]["max_pan_speed"],
+            max_tilt_speed=config["control"]["max_tilt_speed"],
+            camera_jitter=self.camera_jitter
+        )
+
+    # -----------------------------------------
+    # UPDATE SIMULATION
+    # -----------------------------------------
+
+    def update(self):
+        """Advance the simulation by one frame."""
+
+        self.motion.update(
+            self.target,
+            self.dt
+        )
+
+    # -----------------------------------------
+    # MOVE CAMERA
+    # -----------------------------------------
+
+    def move_camera(self, pan_speed, tilt_speed):
+        """Move the camera using pan and tilt speeds."""
+
+        self.camera.move(
+            pan_speed,
+            tilt_speed,
+            self.dt
+        )
+
+    # -----------------------------------------
+    # GET COMPLETE WORLD FRAME
+    # -----------------------------------------
+
+    def get_world_frame(self):
+        """Return the complete simulation world."""
+
+        canvas = self.scene.create_canvas()
+
+        self.scene.draw_target(
+            canvas,
+            self.target
+        )
+
+        return canvas
+
+    # -----------------------------------------
+    # GET CAMERA FRAME
+    # -----------------------------------------
+
+    def get_frame(self):
+        """
+        Return the current camera frame with optional
+        camera jitter and measurement noise.
+        """
+
+        # Get complete simulation world
+        world_frame = self.get_world_frame()
+
+        # Get camera view
+        # Camera handles temporary jitter internally
+        frame = self.camera.get_frame(
+            world_frame
+        )
+
+        # -----------------------------------------
+        # APPLY MEASUREMENT NOISE
+        # -----------------------------------------
+
+        if (
+            self.noise_type == "gaussian"
+            and self.noise_level > 0
+        ):
+
+            noise = np.random.normal(
+                loc=0,
+                scale=self.noise_level,
+                size=frame.shape
+            )
+
+            # Convert before adding noise
+            noisy_frame = (
+                frame.astype(np.float32)
+                + noise
+            )
+
+            # Keep pixel values valid
+            noisy_frame = np.clip(
+                noisy_frame,
+                0,
+                255
+            )
+
+            # Convert back to image format
+            frame = noisy_frame.astype(np.uint8)
+
+        return frame
+
+    # -----------------------------------------
+    # GET CAMERA/IMAGE GROUND TRUTH
+    # -----------------------------------------
+
+    def get_ground_truth(self):
+        """
+        Return target position in camera/image coordinates.
+        """
+
+        target_x, target_y = self.target.get_position()
+
+        camera_x, camera_y = self.camera.get_position()
+
+        image_x = target_x - camera_x
+        image_y = target_y - camera_y
+
+        return {
+            "x": float(image_x),
+            "y": float(image_y)
+        }
+
+    # -----------------------------------------
+    # GET WORLD GROUND TRUTH
+    # -----------------------------------------
+
+    def get_world_ground_truth(self):
+        """Return target position in world coordinates."""
+
+        x, y = self.target.get_position()
+
+        return {
+            "x": float(x),
+            "y": float(y)
+        }

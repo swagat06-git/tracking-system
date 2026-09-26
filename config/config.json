@@ -20,13 +20,14 @@
     },
 
     "disturbance": {
-        "noise_type": "none",
-        "noise_level": 0,
-        "camera_jitter": 0
+        "noise_type": "gaussian",
+        "noise_level": 5,
+        "camera_jitter": 2
     },
 
     "control": {
-        "max_pan_speed": 5.0,
-        "max_tilt_speed": 5.0
+        "max_pan_speed": 250.0,
+        "max_tilt_speed": 150.0,
+        "gain": 5.0
     }
 }

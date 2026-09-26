@@ -4,8 +4,7 @@ import math
 from simulation.target import Target
 from simulation.motion import Motion
 from simulation.scene import Scene
-from vision.detector import TargetDetector
-from tracking.kalman import KalmanTracker
+from tracking.pipeline import TrackingPipeline
 
 
 def main():
@@ -47,13 +46,7 @@ def main():
     # Detector + Kalman
     # -----------------------------
 
-    detector = TargetDetector(
-        threshold=200,
-        min_area=5,
-        max_area=5000
-    )
-
-    tracker = KalmanTracker(dt=dt)
+    pipeline = TrackingPipeline()
 
     valid_frames = 0
 
@@ -75,25 +68,17 @@ def main():
         frame = scene.create_canvas()
         frame = scene.draw_target(frame, target)
 
-        # Detect target
-        detection = detector.detect(frame)
+        # Process frame through complete pipeline
+        result = pipeline.process(frame)
 
-        if not detection["detected"]:
+        if not result["detected"]:
             print(f"Frame {frame_number:02d} | Detection FAILED")
             continue
+        measured_x = result["position"]["x"]
+        measured_y = result["position"]["y"]
 
-        # Simulate detector noise
-        measured_x = detection["x"] + random.gauss(0, 3)
-        measured_y = detection["y"] + random.gauss(0, 3)
 
-        # Kalman prediction
-        tracker.predict()
-
-        # Kalman correction
-        estimate = tracker.update(
-            measured_x,
-            measured_y
-        )
+        estimate = result["position"]
 
         valid_frames += 1
 
@@ -101,7 +86,6 @@ def main():
             print(
                 f"Frame {frame_number:02d} | "
                 f"True: ({true_x:.1f}, {true_y:.1f}) | "
-                f"Measured: ({measured_x:.1f}, {measured_y:.1f}) | "
                 f"Kalman: ({estimate['x']:.1f}, {estimate['y']:.1f})"
             )
 
@@ -115,9 +99,8 @@ def main():
 
     final_x, final_y = target.get_position()
 
-    estimated_position = tracker.get_position()
-    estimated_velocity = tracker.get_velocity()
-
+    estimated_position = pipeline.tracker.get_position()
+    estimated_velocity = pipeline.tracker.get_velocity()
     position_error = math.sqrt(
         (estimated_position["x"] - final_x) ** 2
         + (estimated_position["y"] - final_y) ** 2
