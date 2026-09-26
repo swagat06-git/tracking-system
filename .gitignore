@@ -19,6 +19,7 @@ env/
 
 # Environment variables
 .env
+.env.*
 
 # Generated data
 data/
@@ -27,6 +28,7 @@ outputs/
 logs/
 runs/
 
+# Generated debug/plot files
 debug_closed_loop_frame.png
 tracking_error_over_time.png
 
@@ -34,3 +36,7 @@ tracking_error_over_time.png
 *.pt
 *.pth
 *.onnx
+
+# Keep the trained ATLAS detector model in Git
+!models/
+!models/target_detector_cnn.pth
