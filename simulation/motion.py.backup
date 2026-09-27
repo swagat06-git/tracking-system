@@ -46,23 +46,10 @@ class Motion:
         new_x = x + vx * dt
         new_y = y + vy * dt
 
-    # Keep target inside the region where the camera
-    # can physically center the target.
-        min_x = self.width / 2
-        max_x = self.width - self.width / 2
+        # Keep target inside the world
+        new_x = max(target.size, min(self.width - target.size, new_x))
+        new_y = max(target.size, min(self.height - target.size, new_y))
 
-        min_y = self.height / 2
-        max_y = self.height - self.height / 2
-
-        if new_x <= min_x or new_x >= max_x:
-            vx = -vx
-            new_x = max(min_x, min(max_x, new_x))
-
-        if new_y <= min_y or new_y >= max_y:
-            vy = -vy
-            new_y = max(min_y, min(max_y, new_y))
-
-        target.set_velocity(vx, vy)
         target.set_position(new_x, new_y)
 
     # -------------------------------------------------
