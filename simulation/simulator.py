@@ -5,6 +5,7 @@ from simulation.scene import Scene
 from simulation.target import Target
 from simulation.motion import Motion
 from simulation.camera import Camera
+from simulation.atmosphere import Atmosphere
 
 
 class Simulator:
@@ -36,6 +37,14 @@ class Simulator:
         self.noise_type = config["disturbance"]["noise_type"]
         self.noise_level = config["disturbance"]["noise_level"]
         self.camera_jitter = config["disturbance"]["camera_jitter"]
+        self.atmosphere_mode = config["disturbance"].get(
+            "atmosphere",
+            "clear"
+        )
+
+        self.atmosphere = Atmosphere(
+            self.atmosphere_mode
+        )
 
         # -----------------------------------------
         # CREATE SCENE
@@ -201,7 +210,7 @@ class Simulator:
             noisy_frame[pepper_mask] = 0
 
             frame = noisy_frame
-
+        frame = self.atmosphere.apply(frame)
         return frame
 
     # -----------------------------------------

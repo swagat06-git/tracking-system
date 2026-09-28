@@ -22,7 +22,8 @@
     "disturbance": {
         "noise_type": "none",
         "noise_level": 0,
-        "camera_jitter": 0
+        "camera_jitter": 0,
+        "atmosphere": "low_light"
     },
 
     "control": {

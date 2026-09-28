@@ -1,11 +1,29 @@
 import csv
 import json
+import math
 import os
 import sys
 import time
 
 from simulation.video_source import VideoFileSource
 from tracking.system import TrackingSystem
+
+
+def load_ground_truth(path):
+    ground_truth = {}
+
+    with open(path, "r", newline="") as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            frame = int(row["frame"])
+
+            ground_truth[frame] = {
+                "x": float(row["ground_truth_x"]),
+                "y": float(row["ground_truth_y"]),
+            }
+
+    return ground_truth
 
 
 def main():
@@ -28,6 +46,28 @@ def main():
     # Open video
     source = VideoFileSource(video_path)
 
+    # Locate matching ground-truth CSV
+    video_name = os.path.splitext(
+        os.path.basename(video_path)
+    )[0]
+
+    ground_truth_path = os.path.join(
+        os.path.dirname(video_path),
+        f"{video_name}_ground_truth.csv"
+    )
+
+    if not os.path.exists(ground_truth_path):
+        raise FileNotFoundError(
+            "Ground-truth CSV not found:\n"
+            f"{ground_truth_path}\n\n"
+            "Generate the synthetic video first using:\n"
+            "python -m scripts.generate_synthetic_video"
+        )
+
+    ground_truth = load_ground_truth(
+        ground_truth_path
+    )
+
     # Use the existing tracking system unchanged
     tracking_system = TrackingSystem(
         config=config,
@@ -38,10 +78,6 @@ def main():
 
     output_dir = "outputs/benchmark_video"
     os.makedirs(output_dir, exist_ok=True)
-
-    video_name = os.path.splitext(
-        os.path.basename(video_path)
-    )[0]
 
     csv_path = os.path.join(
         output_dir,
@@ -62,6 +98,8 @@ def main():
     acquisition_time = None
     first_detection_frame = None
 
+    errors = []
+
     frame_records = []
 
     benchmark_start = time.perf_counter()
@@ -78,6 +116,7 @@ def main():
         process_start = time.perf_counter()
 
         result = tracking_system.process(frame)
+        
 
         process_time = (
             time.perf_counter() - process_start
@@ -105,10 +144,37 @@ def main():
         velocity = result.get("velocity")
         command = result.get("command")
 
+        # Calculate centroiding error.
+        error = None
+
+        gt = ground_truth.get(total_frames)
+        if (
+            gt is not None
+            and position is not None
+        ):
+            dx = position["x"] - gt["x"]
+            dy = position["y"] - gt["y"]
+
+            error = math.sqrt(
+                dx * dx + dy * dy
+            )
+
+            errors.append(error)
+
         frame_records.append({
             "frame": total_frames,
             "timestamp_seconds": (
                 (total_frames - 1) / source.fps
+            ),
+            "ground_truth_x": (
+                gt["x"]
+                if gt is not None
+                else None
+            ),
+            "ground_truth_y": (
+                gt["y"]
+                if gt is not None
+                else None
             ),
             "detected": detected,
             "tracking": tracking,
@@ -122,6 +188,7 @@ def main():
                 if position is not None
                 else None
             ),
+            "centroid_error": error,
             "velocity_x": (
                 velocity["vx"]
                 if velocity is not None
@@ -151,7 +218,7 @@ def main():
 
     source.release()
 
-    # Calculate metrics
+    # Calculate tracking rates
     if total_frames > 0:
         detection_rate = (
             detected_frames / total_frames * 100.0
@@ -164,6 +231,7 @@ def main():
         detection_rate = 0.0
         tracking_rate = 0.0
 
+    # Processing metrics
     if processing_times:
         average_processing_ms = (
             sum(processing_times)
@@ -188,6 +256,23 @@ def main():
         max_processing_ms = 0.0
         measured_processing_fps = 0.0
 
+    # Accuracy metrics
+    if errors:
+        average_error = (
+            sum(errors) / len(errors)
+        )
+
+        maximum_error = max(errors)
+
+        rmse = math.sqrt(
+            sum(error * error for error in errors)
+            / len(errors)
+        )
+    else:
+        average_error = None
+        maximum_error = None
+        rmse = None
+
     video_duration = (
         total_frames / source.fps
         if source.fps > 0
@@ -203,6 +288,7 @@ def main():
     summary = {
         "video": {
             "path": video_path,
+            "ground_truth_path": ground_truth_path,
             "width": source.width,
             "height": source.height,
             "fps": source.fps,
@@ -224,14 +310,12 @@ def main():
             "first_detection_frame": first_detection_frame,
             "acquisition_time_seconds": acquisition_time,
         },
-        "limitations": [
-            "This MP4 benchmark does not have independent "
-            "ground-truth target coordinates.",
-            "Centroid error and RMSE therefore cannot be "
-            "computed from this video alone.",
-            "The simulator benchmark remains the source "
-            "of ground-truth error measurements."
-        ]
+        "accuracy": {
+            "frames_with_error": len(errors),
+            "average_centroid_error_pixels": average_error,
+            "maximum_centroid_error_pixels": maximum_error,
+            "rmse_pixels": rmse,
+        },
     }
 
     # Write frame-level CSV
@@ -240,23 +324,31 @@ def main():
         "w",
         newline=""
     ) as file:
-        writer = csv.DictWriter(
-            file,
-            fieldnames=frame_records[0].keys()
+
+        fieldnames = (
+            frame_records[0].keys()
             if frame_records
             else [
                 "frame",
                 "timestamp_seconds",
+                "ground_truth_x",
+                "ground_truth_y",
                 "detected",
                 "tracking",
                 "x",
                 "y",
+                "centroid_error",
                 "velocity_x",
                 "velocity_y",
                 "pan_speed",
                 "tilt_speed",
                 "processing_ms",
             ]
+        )
+
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames
         )
 
         writer.writeheader()
@@ -267,6 +359,7 @@ def main():
         json_path,
         "w"
     ) as file:
+
         json.dump(
             summary,
             file,
@@ -278,53 +371,74 @@ def main():
     print("       ATLAS MP4 BENCHMARK")
     print("========================================")
     print()
-    print(f"Video:              {video_path}")
-    print(
-        f"Resolution:         "
-        f"{source.width}x{source.height}"
-    )
-    print(f"Video FPS:          {source.fps:.2f}")
-    print(f"Frames processed:   {total_frames}")
-    print(f"Duration:           {video_duration:.2f}s")
+    print(f"Video frames       : {total_frames}")
+    print(f"Video FPS          : {source.fps:.2f}")
     print()
+    print("PERFORMANCE")
+    print("----------------------------------------")
     print(
-        f"Detection rate:     "
-        f"{detection_rate:.2f}%"
-    )
-    print(
-        f"Lock retention:     "
-        f"{lock_retention:.2f}%"
-    )
-    print(
-        f"Target loss:        "
-        f"{target_loss:.2f}%"
-    )
-    print()
-    print(
-        f"Acquisition time:   "
-        f"{acquisition_time:.3f}s"
-        if acquisition_time is not None
-        else "Acquisition time:   Not detected"
-    )
-    print()
-    print(
-        f"Processing FPS:     "
+        f"Processing FPS     : "
         f"{measured_processing_fps:.2f}"
     )
     print(
-        f"Avg processing:     "
-        f"{average_processing_ms:.3f} ms"
+        f"Avg processing     : "
+        f"{average_processing_ms:.2f} ms"
     )
     print(
-        f"Max processing:     "
-        f"{max_processing_ms:.3f} ms"
+        f"Max processing     : "
+        f"{max_processing_ms:.2f} ms"
     )
     print()
-    print(f"Frame log:          {csv_path}")
-    print(f"Summary:            {json_path}")
+    print("TRACKING")
+    print("----------------------------------------")
+    print(
+        f"Acquisition time   : "
+        f"{acquisition_time:.3f} sec"
+        if acquisition_time is not None
+        else "Acquisition time   : N/A"
+    )
+    print(
+        f"Detection rate     : "
+        f"{detection_rate:.2f}%"
+    )
+    print(
+        f"Lock retention     : "
+        f"{lock_retention:.2f}%"
+    )
+    print(
+        f"Target loss        : "
+        f"{target_loss:.2f}%"
+    )
     print()
-    print("Ground-truth error: NOT AVAILABLE")
+    print("ACCURACY")
+    print("----------------------------------------")
+
+    if average_error is not None:
+        print(
+            f"Average error      : "
+            f"{average_error:.3f} px"
+        )
+        print(
+            f"Maximum error      : "
+            f"{maximum_error:.3f} px"
+        )
+        print(
+            f"RMSE               : "
+            f"{rmse:.3f} px"
+        )
+    else:
+        print("No valid ground-truth errors calculated.")
+
+    print()
+    print("FILES")
+    print("----------------------------------------")
+    print(f"JSON : {json_path}")
+    print(f"CSV  : {csv_path}")
+    print()
     print("========================================")
+    print("       BENCHMARK COMPLETE")
+    print("========================================")
+    print()
 
 
 if __name__ == "__main__":

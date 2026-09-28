@@ -93,10 +93,7 @@ class MLDetector:
         # change by up to twice the jitter amount between frames.
         # -----------------------------------------------------
 
-        self.max_jump = max(
-            30.0,
-            30.0 + 2.0 * self.camera_jitter
-        )
+        self.max_jump = 40.0
 
     # =========================================================
     # CNN DETECTOR
@@ -148,10 +145,11 @@ class MLDetector:
     # =========================================================
 
     def _bright_target_detect(self, gray):
+        threshold_value = 120 if self.config["disturbance"].get("atmosphere") == "low_light" else 220
 
         _, binary = cv2.threshold(
             gray,
-            220,
+            threshold_value,
             255,
             cv2.THRESH_BINARY
         )
@@ -298,73 +296,73 @@ class MLDetector:
     # =========================================================
 
     def detect(self, frame: np.ndarray):
-
         if frame is None:
             return None
-
-    # -----------------------------------------------------
-    # Convert to grayscale
-    # -----------------------------------------------------
 
         if len(frame.shape) == 3:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         else:
             gray = frame
 
-    # -----------------------------------------------------
-    # Gaussian noise preprocessing
-    # -----------------------------------------------------
-
         if self.noise_type == "gaussian":
-            gray = cv2.GaussianBlur(
-                gray,
-                (5, 5),
-                0
-            )
+            gray = cv2.GaussianBlur(gray, (5, 5), 0)
 
-    # -----------------------------------------------------
-    # Salt & Pepper mode
-    # -----------------------------------------------------
-
+    # ---------------------------------------------------------
+    # Salt-and-pepper noise
+    # ---------------------------------------------------------
         if self.noise_type == "salt_pepper":
-
             detection = self._salt_pepper_detect(gray)
 
             if detection is not None:
                 self.last_detection = detection.copy()
                 return detection
 
-        # Allow Kalman to handle temporary misses
-            if self.last_detection is not None:
-                return None
-
-        # CNN fallback for initial acquisition
-                detection = self._cnn_detect(gray)
+        # Do not trust a CNN fallback if we already have a
+        # previous detection and the jump is physically implausible.
+            detection = self._cnn_detect(gray)
 
             if detection is not None:
+                if self.last_detection is not None:
+                    jump = float(
+                    np.linalg.norm(detection - self.last_detection)
+                    )    
+
+                    if jump > self.max_jump:
+                        return None
+
                 self.last_detection = detection.copy()
+                return detection
 
-            return detection
+            return None
 
-    # -----------------------------------------------------
-    # Primary bright-target detection
-    # -----------------------------------------------------
-
+    # ---------------------------------------------------------
+    # Classical bright-target detector
+    # ---------------------------------------------------------
         detection = self._bright_target_detect(gray)
 
         if detection is not None:
             self.last_detection = detection.copy()
             return detection
 
-    # -----------------------------------------------------
+    # ---------------------------------------------------------
     # CNN fallback
-    # -----------------------------------------------------
-
-        
-
+    # ---------------------------------------------------------
         detection = self._cnn_detect(gray)
 
         if detection is not None:
-            self.last_detection = detection.copy()
 
+        # IMPORTANT:
+        # CNN predictions must obey the same temporal constraint
+        # as classical detections.
+            if self.last_detection is not None:
+                jump = float(
+                    np.linalg.norm(detection - self.last_detection)
+                )
+
+                if jump > self.max_jump:
+                    return None
+
+            self.last_detection = detection.copy()
             return detection
+
+        return None

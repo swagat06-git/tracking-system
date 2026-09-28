@@ -90,7 +90,6 @@ class TrackingSystem:
         """
 
         prediction_offset = self.detector.detect(frame)
-
         # --------------------------------------------------
         # DETECTION SUCCESS
         # --------------------------------------------------

@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import cv2
@@ -27,6 +28,11 @@ def main():
         "atlas_synthetic_30s.mp4"
     )
 
+    ground_truth_path = os.path.join(
+        output_dir,
+        "atlas_synthetic_30s_ground_truth.csv"
+    )
+
     # MP4 codec
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
 
@@ -49,40 +55,69 @@ def main():
     print(f"FPS:        {fps}")
     print(f"Duration:   {duration_seconds} seconds")
     print(f"Frames:     {total_frames}")
-    print(f"Output:     {output_path}")
+    print(f"Video:      {output_path}")
+    print(f"Ground truth: {ground_truth_path}")
     print()
 
-    for frame_number in range(total_frames):
-        # Advance target motion
-        simulator.update()
+    with open(
+        ground_truth_path,
+        "w",
+        newline=""
+    ) as gt_file:
 
-        # Generate the exact camera frame from the simulator
-        frame = simulator.get_frame()
+        gt_writer = csv.writer(gt_file)
 
-        # Simulator produces a grayscale frame.
-        # VideoWriter is configured for grayscale.
-        if len(frame.shape) == 3:
-            frame = cv2.cvtColor(
-                frame,
-                cv2.COLOR_BGR2GRAY
-            )
+        gt_writer.writerow([
+            "frame",
+            "timestamp_seconds",
+            "ground_truth_x",
+            "ground_truth_y"
+        ])
 
-        writer.write(frame)
+        for frame_number in range(total_frames):
 
-        if (frame_number + 1) % int(fps) == 0:
-            elapsed = (frame_number + 1) / fps
-            print(
-                f"Generated {frame_number + 1}/{total_frames} "
-                f"frames ({elapsed:.0f}s)"
-            )
+            # Advance target motion
+            simulator.update()
+
+            # Generate the exact camera frame
+            frame = simulator.get_frame()
+
+            # Get the target position in camera/image coordinates.
+            # This is the ground truth corresponding to this frame.
+            ground_truth = simulator.get_ground_truth()
+
+            # Simulator produces a grayscale frame.
+            if len(frame.shape) == 3:
+                frame = cv2.cvtColor(
+                    frame,
+                    cv2.COLOR_BGR2GRAY
+                )
+
+            writer.write(frame)
+
+            gt_writer.writerow([
+                frame_number + 1,
+                (frame_number) / fps,
+                ground_truth["x"],
+                ground_truth["y"]
+            ])
+
+            if (frame_number + 1) % int(fps) == 0:
+                elapsed = (frame_number + 1) / fps
+
+                print(
+                    f"Generated {frame_number + 1}/{total_frames} "
+                    f"frames ({elapsed:.0f}s)"
+                )
 
     writer.release()
 
     print()
     print("Video generation complete.")
     print(f"Saved to: {output_path}")
+    print(f"Ground truth saved to: {ground_truth_path}")
 
-    # Verify the generated file
+    # Verify the generated video
     cap = cv2.VideoCapture(output_path)
 
     if not cap.isOpened():
@@ -93,10 +128,15 @@ def main():
     generated_frames = int(
         cap.get(cv2.CAP_PROP_FRAME_COUNT)
     )
-    generated_fps = cap.get(cv2.CAP_PROP_FPS)
+
+    generated_fps = cap.get(
+        cv2.CAP_PROP_FPS
+    )
+
     generated_width = int(
         cap.get(cv2.CAP_PROP_FRAME_WIDTH)
     )
+
     generated_height = int(
         cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
     )
@@ -112,6 +152,21 @@ def main():
     print(
         f"Duration:    "
         f"{generated_frames / generated_fps:.2f}s"
+    )
+
+    # Verify ground-truth row count
+    with open(
+        ground_truth_path,
+        "r",
+        newline=""
+    ) as gt_file:
+
+        ground_truth_rows = sum(
+            1 for _ in gt_file
+        ) - 1
+
+    print(
+        f"GT rows:     {ground_truth_rows}"
     )
 
 
