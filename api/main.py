@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from simulation.simulator import Simulator
 from tracking.system import TrackingSystem
 from api.response import create_tracking_response
+from api.benchmark import get_last_benchmark, run_benchmark
 
 
 app = FastAPI(
@@ -15,10 +16,6 @@ app = FastAPI(
 )
 
 
-# --------------------------------------------------
-# CORS
-# --------------------------------------------------
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -27,7 +24,7 @@ app.add_middleware(
         "http://localhost:8080",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
-        "http://localhost:8080",
+        "http://127.0.0.1:8080",
         "https://atlas-henna-nu.vercel.app",
     ],
     allow_credentials=True,
@@ -36,17 +33,9 @@ app.add_middleware(
 )
 
 
-# --------------------------------------------------
-# Load configuration
-# --------------------------------------------------
-
 with open("config/config.json", "r") as file:
     config = json.load(file)
 
-
-# --------------------------------------------------
-# Initialize tracking system
-# --------------------------------------------------
 
 simulator = Simulator(config)
 
@@ -58,24 +47,13 @@ tracking_system = TrackingSystem(
 )
 
 
-# --------------------------------------------------
-# Health check
-# --------------------------------------------------
-
 @app.get("/health")
 def health_check():
-    return {
-        "status": "ok"
-    }
+    return {"status": "ok"}
 
-
-# --------------------------------------------------
-# Tracking endpoint
-# --------------------------------------------------
 
 @app.get("/tracking")
 def get_tracking_data():
-
     simulator.update()
 
     frame = simulator.get_frame()
@@ -90,3 +68,13 @@ def get_tracking_data():
     )
 
     return response
+
+
+@app.get("/benchmark")
+def get_benchmark():
+    return get_last_benchmark()
+
+
+@app.post("/benchmark")
+def create_benchmark():
+    return run_benchmark()
