@@ -1,287 +1,272 @@
-import sys
-from pathlib import Path
-
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-import json
 import csv
 import random
-import shutil
+from pathlib import Path
+
 import cv2
-
-from simulation.simulator import Simulator
-
-
-def load_config(config_path: str = "config/config.json") -> dict:
-    with open(config_path, "r") as f:
-        return json.load(f)
+import numpy as np
 
 
-def generate_dataset(
-    num_episodes: int = 50,
-    frames_per_episode: int = 100,
-    output_dir: str = "dataset"
-):
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
+NUM_IMAGES = 5000
+
+IMAGE_WIDTH = 640
+IMAGE_HEIGHT = 480
+
+TARGET_SIZE = 10
+TARGET_BRIGHTNESS = 255
+
+DATASET_DIR = Path("dataset")
+IMAGE_DIR = DATASET_DIR / "images"
+LABEL_FILE = DATASET_DIR / "labels.csv"
+
+random.seed(42)
+np.random.seed(42)
+
+
+# ============================================================
+# IMAGE GENERATION
+# ============================================================
+
+def create_clean_frame(target_x, target_y):
     """
-    Generate a spatially diverse target-detection dataset.
-
-    Important:
-    - Target position is randomized for EVERY frame.
-    - Target always remains safely inside the camera view.
-    - Noise and camera jitter are disabled initially.
-    - Ground-truth coordinates are in image/camera coordinates.
+    Create a black 640x480 image with a white square target.
     """
+    frame = np.zeros(
+        (IMAGE_HEIGHT, IMAGE_WIDTH),
+        dtype=np.uint8
+    )
 
-    dataset_path = Path(output_dir)
-    images_path = dataset_path / "images"
+    half = TARGET_SIZE // 2
 
-    # ---------------------------------------------------------
-    # PREPARE DATASET DIRECTORY
-    # ---------------------------------------------------------
+    x1 = int(round(target_x - half))
+    y1 = int(round(target_y - half))
+    x2 = x1 + TARGET_SIZE
+    y2 = y1 + TARGET_SIZE
 
-    images_path.mkdir(parents=True, exist_ok=True)
-
-    # Remove old generated images so stale files cannot remain
-    old_images = list(images_path.glob("*.png"))
-
-    if old_images:
-        print(f"Removing {len(old_images)} old dataset images...")
-
-        for image_path in old_images:
-            image_path.unlink()
-
-    csv_file_path = dataset_path / "labels.csv"
-
-    # ---------------------------------------------------------
-    # LOAD CONFIGURATION
-    # ---------------------------------------------------------
-
-    config = load_config()
-
-    target_size = config["target"]["size"]
-
-    img_width = config["camera"]["width"]
-    img_height = config["camera"]["height"]
-
-    # ---------------------------------------------------------
-    # DATASET SETTINGS
-    # ---------------------------------------------------------
-
-    total_frames = num_episodes * frames_per_episode
-
-    # Fixed seed makes dataset generation reproducible.
-    random.seed(42)
-
-    print()
-    print("=" * 70)
-    print(f"{'DATASET GENERATION':^70}")
-    print("=" * 70)
-
-    print(f"Episodes              : {num_episodes}")
-    print(f"Frames per episode    : {frames_per_episode}")
-    print(f"Total frames          : {total_frames}")
-    print(f"Image resolution      : {img_width} x {img_height}")
-    print(f"Target size           : {target_size}")
-    print(f"Saving to             : {dataset_path.resolve()}")
-    print("-" * 70)
-
-    # ---------------------------------------------------------
-    # CREATE CSV
-    # ---------------------------------------------------------
-
-    fieldnames = [
-        "image_filename",
-        "center_x",
-        "center_y",
-        "width",
-        "height",
-        "norm_center_x",
-        "norm_center_y",
-        "norm_width",
-        "norm_height",
-        "is_visible"
-    ]
-
-    total_frame_count = 0
-
-    with open(csv_file_path, mode="w", newline="") as csv_file:
-
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=fieldnames
+    # Draw only if target intersects the image.
+    if x2 > 0 and x1 < IMAGE_WIDTH and y2 > 0 and y1 < IMAGE_HEIGHT:
+        cv2.rectangle(
+            frame,
+            (x1, y1),
+            (x2 - 1, y2 - 1),
+            TARGET_BRIGHTNESS,
+            -1
         )
 
-        writer.writeheader()
+    return frame
 
-        # -----------------------------------------------------
-        # EPISODES
-        # -----------------------------------------------------
 
-        for episode in range(num_episodes):
+def add_gaussian_noise(frame, noise_level):
+    """
+    Add Gaussian noise with the requested standard deviation.
+    """
+    noise = np.random.normal(
+        loc=0.0,
+        scale=noise_level,
+        size=frame.shape
+    )
 
-            # -------------------------------------------------
-            # Create a fresh simulator
-            # -------------------------------------------------
+    noisy = frame.astype(np.float32) + noise
 
-            ep_config = json.loads(json.dumps(config))
+    return np.clip(noisy, 0, 255).astype(np.uint8)
 
-            # Keep disturbances OFF for the first clean model.
-            ep_config["disturbance"]["camera_jitter"] = 0.0
-            ep_config["disturbance"]["noise_level"] = 0.0
 
-            sim = Simulator(ep_config)
+def add_salt_pepper_noise(frame, probability=0.10):
+    """
+    Add salt-and-pepper noise.
 
-            # Camera position remains fixed during dataset
-            # generation.
-            camera_x = sim.camera.x
-            camera_y = sim.camera.y
+    probability = fraction of pixels affected approximately.
+    Half become white and half become black.
+    """
+    noisy = frame.copy()
 
-            # Keep the entire target comfortably inside the
-            # camera frame.
-            margin = 40
+    random_matrix = np.random.random(frame.shape)
 
-            min_x = camera_x + margin
-            max_x = camera_x + img_width - margin
+    salt_mask = random_matrix < (probability / 2.0)
+    pepper_mask = random_matrix > (1.0 - probability / 2.0)
 
-            min_y = camera_y + margin
-            max_y = camera_y + img_height - margin
+    noisy[salt_mask] = 255
+    noisy[pepper_mask] = 0
 
-            # -------------------------------------------------
-            # Generate frames
-            # -------------------------------------------------
+    return noisy
 
-            for _ in range(frames_per_episode):
 
-                # -------------------------------------------------
-                # RANDOMIZE TARGET POSITION FOR EVERY FRAME
-                # -------------------------------------------------
+# ============================================================
+# DATASET GENERATION
+# ============================================================
 
-                target_x_world = random.uniform(
-                    min_x,
-                    max_x
-                )
+def generate_dataset():
 
-                target_y_world = random.uniform(
-                    min_y,
-                    max_y
-                )
+    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+    IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-                sim.target.set_position(
-                    target_x_world,
-                    target_y_world
-                )
+    # Remove old dataset images.
+    old_images = list(IMAGE_DIR.glob("*.npy"))
 
-                # No motion between frames.
-                # Each frame is an independent spatial sample.
-                sim.target.set_velocity(0.0, 0.0)
+    print(f"Removing {len(old_images)} old dataset images...")
 
-                # -------------------------------------------------
-                # RENDER IMAGE
-                # -------------------------------------------------
+    for image_file in old_images:
+        image_file.unlink()
 
-                frame = sim.get_frame()
+    # Dataset distribution:
+    #
+    # 15% clean
+    # 15% Gaussian 5-10
+    # 15% Gaussian 10-15
+    # 15% Gaussian 15-20
+    # 40% Salt & Pepper 10%
+    #
+    # Total = 100%
 
-                # -------------------------------------------------
-                # GET GROUND TRUTH
-                # -------------------------------------------------
+    clean_count = int(NUM_IMAGES * 0.15)
+    gaussian_low_count = int(NUM_IMAGES * 0.15)
+    gaussian_mid_count = int(NUM_IMAGES * 0.15)
+    gaussian_high_count = int(NUM_IMAGES * 0.15)
 
-                gt = sim.get_ground_truth()
+    salt_pepper_count = (
+        NUM_IMAGES
+        - clean_count
+        - gaussian_low_count
+        - gaussian_mid_count
+        - gaussian_high_count
+    )
 
-                target_x = float(gt["x"])
-                target_y = float(gt["y"])
+    conditions = []
 
-                # -------------------------------------------------
-                # VISIBILITY
-                # -------------------------------------------------
+    # Clean
+    conditions.extend(
+        [("clean", 0.0)] * clean_count
+    )
 
-                is_visible = (
-                    0 <= target_x < img_width
-                    and
-                    0 <= target_y < img_height
-                )
+    # Gaussian 5-10
+    for _ in range(gaussian_low_count):
+        conditions.append(
+            ("gaussian", random.uniform(5.0, 10.0))
+        )
 
-                # -------------------------------------------------
-                # SAVE IMAGE
-                # -------------------------------------------------
+    # Gaussian 10-15
+    for _ in range(gaussian_mid_count):
+        conditions.append(
+            ("gaussian", random.uniform(10.0, 15.0))
+        )
 
-                frame_filename = (
-                    f"frame_{total_frame_count:05d}.png"
-                )
+    # Gaussian 15-20
+    for _ in range(gaussian_high_count):
+        conditions.append(
+            ("gaussian", random.uniform(15.0, 20.0))
+        )
 
-                img_save_path = images_path / frame_filename
+    # Salt and pepper 10%
+    conditions.extend(
+        [("salt_pepper", 0.10)] * salt_pepper_count
+    )
 
-                cv2.imwrite(
-                    str(img_save_path),
-                    frame
-                )
+    random.shuffle(conditions)
 
-                # -------------------------------------------------
-                # BOUNDING BOX
-                # -------------------------------------------------
+    with open(LABEL_FILE, "w", newline="") as csv_file:
 
-                bbox_w = target_size
-                bbox_h = target_size
+        writer = csv.writer(csv_file)
 
-                # Normalize center coordinates to [0, 1]
-                norm_cx = target_x / img_width
-                norm_cy = target_y / img_height
+        # IMPORTANT:
+        # These column names must match train_ml_detector.py.
+        writer.writerow([
+            "image_filename",
+            "center_x",
+            "center_y",
+            "norm_center_x",
+            "norm_center_y",
+            "is_visible",
+            "noise_type",
+            "noise_level"
+        ])
 
-                norm_w = bbox_w / img_width
-                norm_h = bbox_h / img_height
+        for index, (noise_type, noise_level) in enumerate(conditions):
 
-                # -------------------------------------------------
-                # WRITE LABEL
-                # -------------------------------------------------
-
-                writer.writerow({
-                    "image_filename": frame_filename,
-
-                    "center_x": round(target_x, 2),
-                    "center_y": round(target_y, 2),
-
-                    "width": bbox_w,
-                    "height": bbox_h,
-
-                    "norm_center_x": round(norm_cx, 4),
-                    "norm_center_y": round(norm_cy, 4),
-
-                    "norm_width": round(norm_w, 4),
-                    "norm_height": round(norm_h, 4),
-
-                    "is_visible": 1 if is_visible else 0
-                })
-
-                total_frame_count += 1
-
-            print(
-                f"Episode {episode + 1:02d}/{num_episodes:02d} "
-                f"complete | "
-                f"Total frames: {total_frame_count}"
+            # ------------------------------------------------
+            # Keep targets visible.
+            # ------------------------------------------------
+            #
+            # The target is intentionally sampled with enough
+            # margin so the complete target remains inside the
+            # 640x480 camera frame.
+            #
+            target_x = random.uniform(
+                TARGET_SIZE,
+                IMAGE_WIDTH - TARGET_SIZE
             )
 
-    # ---------------------------------------------------------
-    # FINAL SUMMARY
-    # ---------------------------------------------------------
+            target_y = random.uniform(
+                TARGET_SIZE,
+                IMAGE_HEIGHT - TARGET_SIZE
+            )
 
-    print("=" * 70)
+            # Create clean target image.
+            frame = create_clean_frame(
+                target_x,
+                target_y
+            )
 
-    print(
-        f"SUCCESS: Generated {total_frame_count} labeled frames."
-    )
+            # Apply disturbance.
+            if noise_type == "gaussian":
 
-    print(
-        f"Dataset CSV : {csv_file_path.resolve()}"
-    )
+                frame = add_gaussian_noise(
+                    frame,
+                    noise_level
+                )
 
-    print(
-        f"Images       : {images_path.resolve()}"
-    )
+            elif noise_type == "salt_pepper":
 
-    print("=" * 70)
+                frame = add_salt_pepper_noise(
+                    frame,
+                    probability=0.10
+                )
+
+            # ------------------------------------------------
+            # Save image.
+            # ------------------------------------------------
+
+            filename = f"frame_{index:05d}.npy"
+
+            np.save(
+                IMAGE_DIR / filename,
+                frame
+            )
+
+            # ------------------------------------------------
+            # Normalized target coordinates.
+            # ------------------------------------------------
+
+            norm_x = target_x / IMAGE_WIDTH
+            norm_y = target_y / IMAGE_HEIGHT
+
+            writer.writerow([
+                filename,
+                target_x,
+                target_y,
+                norm_x,
+                norm_y,
+                1,
+                noise_type,
+                noise_level
+            ])
+
+    print()
+    print("=" * 60)
+    print("DATASET GENERATION COMPLETE")
+    print("=" * 60)
+    print(f"Images generated : {NUM_IMAGES}")
+    print(f"Image size       : {IMAGE_WIDTH} x {IMAGE_HEIGHT}")
+    print(f"Clean            : {clean_count}")
+    print(f"Gaussian 5-10    : {gaussian_low_count}")
+    print(f"Gaussian 10-15   : {gaussian_mid_count}")
+    print(f"Gaussian 15-20   : {gaussian_high_count}")
+    print(f"Salt & Pepper    : {salt_pepper_count}")
+    print(f"Labels           : {LABEL_FILE}")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    generate_dataset(
-        num_episodes=50,
-        frames_per_episode=100
-    )
+    generate_dataset()

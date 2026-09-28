@@ -52,7 +52,7 @@ simulator = Simulator(config)
 
 tracking_system = TrackingSystem(
     config=config,
-    acceleration_noise=500.0,
+    acceleration_noise=50.0,
     gain=4.0,
     velocity_scale=0.5
 )

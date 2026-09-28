@@ -12,13 +12,17 @@ class KalmanTracker:
     vx, vy -> target velocity in pixels/second
     """
 
-    def __init__(self, dt=1 / 30, acceleration_noise=100.0):
+    def __init__(
+        self,
+        dt=1 / 30,
+        acceleration_noise=100.0,
+        max_measurement_jump=30.0
+    ):
         self.dt = dt
+        self.max_measurement_jump = max_measurement_jump
 
-        # State vector: [x, y, vx, vy]
         self.state = np.zeros((4, 1), dtype=np.float64)
 
-        # State transition matrix
         self.F = np.array([
             [1, 0, dt, 0],
             [0, 1, 0, dt],
@@ -26,18 +30,13 @@ class KalmanTracker:
             [0, 0, 0,  1]
         ], dtype=np.float64)
 
-        # Measurement matrix.
-        # The detector provides x and y only.
         self.H = np.array([
             [1, 0, 0, 0],
             [0, 1, 0, 0]
         ], dtype=np.float64)
 
-        # Initial state uncertainty
         self.P = np.eye(4, dtype=np.float64) * 100.0
 
-        # Process noise.
-        # Models small unpredictable changes in target motion.
         q = acceleration_noise ** 2
 
         dt2 = dt ** 2
@@ -51,8 +50,6 @@ class KalmanTracker:
             [0,        dt3 / 2, 0,        dt2]
         ], dtype=np.float64)
 
-        # Measurement noise.
-        # This represents uncertainty in detector coordinates.
         measurement_noise = 5.0
 
         self.R = np.eye(2, dtype=np.float64) * (
@@ -64,7 +61,6 @@ class KalmanTracker:
     def initialize(self, x, y):
         """
         Initialize the tracker using the first detection.
-        Initial velocity is assumed to be zero.
         """
 
         self.state = np.array([
@@ -79,10 +75,6 @@ class KalmanTracker:
     def predict(self):
         """
         Predict the target's next state.
-
-        Returns:
-            Dictionary containing predicted x and y.
-            Returns None if the tracker has not been initialized.
         """
 
         if not self.initialized:
@@ -101,12 +93,10 @@ class KalmanTracker:
         """
         Correct the predicted state using a new detection.
 
-        Args:
-            x: Detected x coordinate.
-            y: Detected y coordinate.
-
-        Returns:
-            Corrected target position.
+        A large detector jump is treated as an unreliable
+        measurement. Instead of allowing the old velocity
+        estimate to carry the tracker farther away, the
+        tracker softly re-anchors itself to the new detection.
         """
 
         if not self.initialized:
@@ -118,32 +108,60 @@ class KalmanTracker:
             [float(y)]
         ], dtype=np.float64)
 
-        # Measurement residual
+        # Predicted measurement
+        predicted_measurement = self.H @ self.state
+
+        # Innovation
         innovation = (
             measurement
-            - self.H @ self.state
+            - predicted_measurement
         )
 
-        # Innovation covariance
+        innovation_distance = float(
+            np.linalg.norm(innovation)
+        )
+
+        # --------------------------------------------------
+        # Large-jump recovery
+        # --------------------------------------------------
+
+        if innovation_distance > self.max_measurement_jump:
+
+            # Re-anchor position to the detector.
+            self.state[0, 0] = float(x)
+            self.state[1, 0] = float(y)
+
+            # The previous velocity may have become unreliable.
+            # Dampen it so the next prediction does not run away.
+            self.state[2, 0] *= 0.25
+            self.state[3, 0] *= 0.25
+
+            # Increase position uncertainty so subsequent
+            # measurements are trusted more strongly.
+            self.P = np.eye(4, dtype=np.float64) * 100.0
+
+            return self.get_position()
+
+        # --------------------------------------------------
+        # Normal Kalman update
+        # --------------------------------------------------
+
         S = (
             self.H @ self.P @ self.H.T
             + self.R
         )
 
-        # Kalman gain
         K = (
             self.P
             @ self.H.T
             @ np.linalg.inv(S)
         )
 
-        # Correct the state
         self.state = (
             self.state
             + K @ innovation
         )
 
-        # Correct covariance
         I = np.eye(4)
 
         self.P = (

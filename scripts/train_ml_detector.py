@@ -58,12 +58,20 @@ class TargetDataset(Dataset):
 
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
-        img_path = self.img_dir / row["image_filename"]
-        img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
 
-        # Normalize image to [0, 1] and add channel dim
-        tensor_img = torch.tensor(img, dtype=torch.float32).unsqueeze(0) / 255.0
-        target = torch.tensor([row["norm_center_x"], row["norm_center_y"]], dtype=torch.float32)
+        img_path = self.img_dir / row["image_filename"]
+
+    # Load NumPy image
+        import numpy as np
+        img = np.load(img_path)
+
+    # Convert to float32 and normalize to [0, 1]
+        tensor_img = torch.from_numpy(img.astype(np.float32)).unsqueeze(0) / 255.0
+
+        target = torch.tensor(
+            [row["norm_center_x"], row["norm_center_y"]],
+            dtype=torch.float32
+        )
 
         return tensor_img, target
 

@@ -16,13 +16,13 @@
     },
 
     "motion": {
-        "type": "random"
+        "type": "linear"
     },
 
     "disturbance": {
-        "noise_type": "none",
-        "noise_level": 0,
-        "camera_jitter": 0
+        "noise_type": "gaussian",
+        "noise_level": 5,
+        "camera_jitter": 2
     },
 
     "control": {

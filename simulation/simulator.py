@@ -1,3 +1,4 @@
+
 import numpy as np
 
 from simulation.scene import Scene
@@ -135,50 +136,71 @@ class Simulator:
     # -----------------------------------------
 
     def get_frame(self):
-        """
-        Return the current camera frame with optional
-        camera jitter and measurement noise.
-        """
-
-        # Get complete simulation world
         world_frame = self.get_world_frame()
-
-        # Get camera view
-        # Camera handles temporary jitter internally
-        frame = self.camera.get_frame(
-            world_frame
-        )
+        frame = self.camera.get_frame(world_frame)
 
         # -----------------------------------------
-        # APPLY MEASUREMENT NOISE
+        # GAUSSIAN NOISE
         # -----------------------------------------
 
-        if (
-            self.noise_type == "gaussian"
-            and self.noise_level > 0
-        ):
-
+        if self.noise_type == "gaussian" and self.noise_level > 0:
             noise = np.random.normal(
                 loc=0,
                 scale=self.noise_level,
                 size=frame.shape
             )
 
-            # Convert before adding noise
-            noisy_frame = (
-                frame.astype(np.float32)
-                + noise
-            )
-
-            # Keep pixel values valid
             noisy_frame = np.clip(
-                noisy_frame,
+                frame.astype(np.float32) + noise,
                 0,
                 255
             )
 
-            # Convert back to image format
             frame = noisy_frame.astype(np.uint8)
+
+        # -----------------------------------------
+        # POISSON NOISE
+        # -----------------------------------------
+
+        elif self.noise_type == "poisson" and self.noise_level > 0:
+            scale = 1.0 / self.noise_level
+
+            scaled_frame = (
+                frame.astype(np.float32) * scale
+            )
+
+            poisson_frame = np.random.poisson(
+                scaled_frame
+            ).astype(np.float32)
+
+            poisson_frame = poisson_frame / scale
+
+            frame = np.clip(
+                poisson_frame,
+                0,
+                255
+            ).astype(np.uint8)
+
+        # -----------------------------------------
+        # SALT & PEPPER NOISE
+        # -----------------------------------------
+
+        elif self.noise_type == "salt_pepper" and self.noise_level > 0:
+            noisy_frame = frame.copy()
+
+            probability = self.noise_level
+
+            random_matrix = np.random.random(
+                frame.shape[:2]
+            )
+
+            salt_mask = random_matrix < (probability / 2)
+            pepper_mask = random_matrix > (1 - probability / 2)
+
+            noisy_frame[salt_mask] = 255
+            noisy_frame[pepper_mask] = 0
+
+            frame = noisy_frame
 
         return frame
 
@@ -193,7 +215,7 @@ class Simulator:
 
         target_x, target_y = self.target.get_position()
 
-        camera_x, camera_y = self.camera.get_position()
+        camera_x, camera_y = self.camera.get_rendered_position()
 
         image_x = target_x - camera_x
         image_y = target_y - camera_y
@@ -216,3 +238,4 @@ class Simulator:
             "x": float(x),
             "y": float(y)
         }
+
