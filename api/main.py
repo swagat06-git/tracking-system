@@ -1,12 +1,13 @@
 import json
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from simulation.simulator import Simulator
 from tracking.system import TrackingSystem
 from api.response import create_tracking_response
 from api.benchmark import get_last_benchmark, run_benchmark
+from api.video_benchmark import run_uploaded_video
 
 
 app = FastAPI(
@@ -79,3 +80,22 @@ def get_benchmark():
 @app.post("/benchmark")
 def create_benchmark():
     return run_benchmark()
+
+
+@app.post("/benchmark/video")
+async def create_video_benchmark(
+    video: UploadFile = File(...),
+):
+    try:
+        return await run_uploaded_video(video, config)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Uploaded video benchmark failed safely. "
+            "The existing simulator benchmark is unchanged.",
+        ) from exc
