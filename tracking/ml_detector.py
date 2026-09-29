@@ -57,6 +57,16 @@ class MLDetector:
             else "cpu"
         )
 
+        # The CPU fallback processes one 640×480 frame at a time. Limiting
+        # PyTorch thread fan-out avoids large thread-management overhead on
+        # small Render/free-tier CPUs while leaving CUDA/MPS behavior alone.
+        if self.device.type == "cpu":
+            torch.set_num_threads(1)
+            try:
+                torch.set_num_interop_threads(1)
+            except RuntimeError:
+                pass
+
         self.model = TargetDetectorCNN().to(self.device)
 
         model_file = Path(model_path)
@@ -101,11 +111,10 @@ class MLDetector:
 
     def _cnn_detect(self, gray):
 
+        # from_numpy avoids an unnecessary CPU memory copy for every frame.
         tensor_img = (
-            torch.tensor(
-                gray,
-                dtype=torch.float32
-            )
+            torch.from_numpy(gray)
+            .to(dtype=torch.float32)
             .unsqueeze(0)
             .unsqueeze(0)
             / 255.0
@@ -113,7 +122,7 @@ class MLDetector:
 
         tensor_img = tensor_img.to(self.device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             output = self.model(tensor_img)
 
             norm_x, norm_y = (
